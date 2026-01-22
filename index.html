@@ -1,158 +1,220 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <title>Ghost Hunt</title>
-  <style>
-    body { margin:0; overflow:hidden; font-family: Arial; }
-    #camera {
-      position: fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      object-fit: cover;
-      z-index: 1;
-    }
-    #overlay {
-      position: fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      z-index: 2;
-      pointer-events:none;
-    }
-    #hud {
-      position: fixed;
-      bottom: 10px;
-      width: 100%;
-      display: flex;
-      justify-content: space-around;
-      z-index: 3;
-      pointer-events: none;
-    }
-    .btn {
-      pointer-events: auto;
-      background: rgba(0,0,0,0.6);
-      color:white;
-      padding: 12px 18px;
-      border-radius: 12px;
-      font-size: 16px;
-      border: none;
-    }
-    #ghost {
-      position:absolute;
-      left:50%;
-      top:50%;
-      transform: translate(-50%,-50%);
-      width: 120px;
-      opacity: 0;
-      transition: opacity 0.2s;
-      z-index: 4;
-    }
-    #compass {
-      position: fixed;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      padding: 10px;
-      border-radius: 10px;
-      z-index: 4;
-    }
-    #status {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      padding: 10px;
-      border-radius: 10px;
-      z-index: 4;
-    }
-  </style>
+<meta charset="utf-8">
+<title>Paranormal Detection Unit</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+<style>
+html,body {
+  margin:0;
+  background:black;
+  overflow:hidden;
+  font-family:monospace;
+}
+
+/* CAMERA */
+#camera {
+  position:fixed;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  z-index:0;
+}
+
+/* GHOST */
+#ghost {
+  position:fixed;
+  left:50%;
+  top:50%;
+  width:220px;
+  transform:translate(-50%,-50%);
+  opacity:0;
+  pointer-events:none;
+  z-index:4;
+  mix-blend-mode:screen;
+  filter:drop-shadow(0 0 25px rgba(255,255,255,0.6));
+}
+
+/* HUD */
+#hud {
+  position:fixed;
+  inset:0;
+  z-index:10;
+  pointer-events:none;
+  color:#00ffd5;
+}
+
+#compass {
+  position:absolute;
+  top:20px;
+  left:50%;
+  transform:translateX(-50%);
+  width:120px;
+  height:120px;
+  border:2px solid #00ffd5;
+  border-radius:50%;
+  box-shadow:0 0 25px #00ffd5;
+}
+
+#arrow {
+  position:absolute;
+  left:50%;
+  top:10px;
+  width:4px;
+  height:50px;
+  background:#00ffd5;
+  transform-origin:bottom center;
+  box-shadow:0 0 15px #00ffd5;
+}
+
+#panel {
+  position:absolute;
+  bottom:20px;
+  left:50%;
+  transform:translateX(-50%);
+  width:320px;
+  padding:14px;
+  background:radial-gradient(circle at top,#022,#000);
+  border:2px solid #00ffd5;
+  border-radius:14px;
+  box-shadow:0 0 30px #00ffd5;
+}
+
+#status {
+  text-align:center;
+  font-size:14px;
+  margin-bottom:10px;
+  letter-spacing:1px;
+}
+
+#emf {
+  height:12px;
+  background:#011;
+  overflow:hidden;
+  border:1px solid #00ffd5;
+}
+
+#emfFill {
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg,#00ffd5,#ffffff);
+  box-shadow:0 0 12px #00ffd5;
+}
+</style>
 </head>
+
 <body>
->
-<video id="camera" autoplay playsinline></video>
 
-<div id="overlay">
-  <img id="ghost" src="ghost.png" />
-</div>
+<!-- CAMERA -->
+<video id="camera" autoplay playsinline muted></video>
 
-<div id="compass">Heading: <span id="heading">0</span>°</div>
-<div id="status">Status: <span id="statustxt">Initializing...</span></div>
+<!-- GHOST -->
+<video id="ghost" src="ghost_realistic.webm" autoplay loop muted playsinline></video>
 
+<!-- AUDIO -->
+<audio id="evp" src="evp_static.mp3" loop></audio>
+
+<!-- HUD -->
 <div id="hud">
-  <button class="btn" id="scanBtn">🔍 Scan</button>
-  <button class="btn" id="captureBtn">📷 Capture</button>
+  <div id="compass"><div id="arrow"></div></div>
+  <div id="panel">
+    <div id="status">BOOTING SYSTEM…</div>
+    <div id="emf"><div id="emfFill"></div></div>
+  </div>
 </div>
 
 <script>
-  const video = document.getElementById("camera");
-  const ghost = document.getElementById("ghost");
-  const headingText = document.getElementById("heading");
-  const statusText = document.getElementById("statustxt");
+/* ================= SETUP ================= */
+const GHOST_LAT = -26.41003;     // TEST COORDS
+const GHOST_LON = 152.92618;
+const MAX_DIST = 10;
 
-  let ghostBearing = 120; // degrees
-  let ghostDistance = 30; // meters
-  let currentHeading = 0;
+const camera = document.getElementById("camera");
+const ghost = document.getElementById("ghost");
+const emfFill = document.getElementById("emfFill");
+const status = document.getElementById("status");
+const arrow = document.getElementById("arrow");
+const evp = document.getElementById("evp");
 
-  // Start Camera
-  async function startCamera(){
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
-    video.srcObject = stream;
+let heading=0, smoothBearing=0;
+let calibrated=false;
+let ghostOpacity=0;
+let t=0;
+
+/* ================= CAMERA ================= */
+navigator.mediaDevices.getUserMedia({
+  video:{ facingMode:"environment" }
+}).then(s=>camera.srcObject=s);
+
+/* ================= COMPASS ================= */
+window.addEventListener("deviceorientationabsolute", e=>{
+  if(e.alpha!==null) heading = 360 - e.alpha;
+});
+
+/* ================= MATH ================= */
+function dist(a,b,c,d){
+  const R=6371e3;
+  const dLat=(c-a)*Math.PI/180;
+  const dLon=(d-b)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+
+    Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function bearing(a,b,c,d){
+  const y=Math.sin((d-b)*Math.PI/180)*Math.cos(c*Math.PI/180);
+  const x=Math.cos(a*Math.PI/180)*Math.sin(c*Math.PI/180)-
+          Math.sin(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos((d-b)*Math.PI/180);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+
+/* ================= GPS ================= */
+status.innerText="CALIBRATING SENSORS…";
+
+navigator.geolocation.watchPosition(p=>{
+  calibrated=true;
+
+  const d=dist(p.coords.latitude,p.coords.longitude,GHOST_LAT,GHOST_LON);
+  const strength=Math.max(0,1-d/MAX_DIST);
+
+  emfFill.style.width=(strength*100)+"%";
+
+  if(d>MAX_DIST){
+    status.innerText="SCANNING…";
+    ghostOpacity=Math.max(ghostOpacity-0.03,0);
+    ghost.style.opacity=ghostOpacity;
+    evp.pause();
+    return;
   }
 
-  // Device Compass
-  window.addEventListener("deviceorientationabsolute", (event) => {
-    if (!event.alpha) return;
-    currentHeading = event.alpha;
-    headingText.innerText = Math.round(currentHeading);
-    updateGhostVisibility();
-  });
+  status.innerText =
+    d>6 ? "WEAK SIGNAL" :
+    d>3 ? "STRONG SIGNAL" :
+          "⚠ ENTITY DETECTED";
 
-  // Compass fallback for iOS
-  if (typeof DeviceOrientationEvent !== "undefined" &&
-      typeof DeviceOrientationEvent.requestPermission === "function") {
-    DeviceOrientationEvent.requestPermission()
-      .then(permissionState => {
-        if (permissionState === "granted") {
-          window.addEventListener("deviceorientationabsolute", (event) => {
-            currentHeading = event.alpha;
-            updateGhostVisibility();
-          });
-        }
-      })
-      .catch(console.error);
-  }
+  ghostOpacity=Math.min(ghostOpacity+0.04,0.9);
+  ghost.style.opacity=ghostOpacity;
 
-  // Ghost Visibility based on heading
-  function updateGhostVisibility(){
-    const diff = Math.abs(ghostBearing - currentHeading);
-    const angleDiff = Math.min(diff, 360 - diff);
+  if(evp.paused) evp.play();
+  evp.volume=strength;
 
-    // ghost appears if within 20 degrees
-    if (angleDiff < 20) {
-      ghost.style.opacity = 1;
-      statusText.innerText = "Ghost is near!";
-    } else {
-      ghost.style.opacity = 0;
-      statusText.innerText = "Searching...";
-    }
-  }
+  /* Ghost motion */
+  t+=0.016;
+  const x=Math.sin(t)*40;
+  const y=Math.sin(t*1.4)*30;
+  const scale=1+Math.sin(t*0.7)*0.04;
+  ghost.style.transform=
+    `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(${scale})`;
 
-  // Buttons
-  document.getElementById("scanBtn").addEventListener("click", () => {
-    alert("Scanning... Ghost bearing: " + ghostBearing + "°");
-  });
+  /* Compass */
+  const b=bearing(p.coords.latitude,p.coords.longitude,GHOST_LAT,GHOST_LON);
+  smoothBearing+=(b-smoothBearing)*0.05;
+  arrow.style.transform=
+    `translateX(-50%) rotate(${smoothBearing-heading}deg)`;
 
-  document.getElementById("captureBtn").addEventListener("click", () => {
-    if (ghost.style.opacity == 1) {
-      alert("Captured ghost photo!");
-    } else {
-      alert("No ghost in view.");
-    }
-  });
-
-  startCamera();
+},{ enableHighAccuracy:true });
 </script>
+
 </body>
 </html>

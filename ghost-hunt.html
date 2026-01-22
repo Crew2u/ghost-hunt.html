@@ -96,8 +96,21 @@ let playerLat, playerLon, heading = 0;
 let timeLeft = 300;
 let activeGhost = null;
 
+const camera = document.getElementById("camera");
+const ghost = document.getElementById("ghost");
+const headingEl = document.getElementById("heading");
+const status = document.getElementById("status");
+const timer = document.getElementById("timer");
+const emfFill = document.getElementById("emfFill");
+const captureBtn = document.getElementById("captureBtn");
+const beep = document.getElementById("beep");
+
 const ghosts = [];
 const ghostCount = 3;
+
+// 🔴 CHANGE THIS TO YOUR TEST LOCATION
+let ghostLat = -26.41003;
+let ghostLon = 152.92618;
 
 /* =====================
    CONSTANTS
@@ -162,8 +175,8 @@ function bearing(a,b,c,d){
 
 function spawnGhost(){
   return {
-    lat: playerLat + (Math.random()-0.5)*0.0003,
-    lon: playerLon + (Math.random()-0.5)*0.0003,
+    lat: ghostLat + (Math.random()-0.5)*0.0003,
+    lon: ghostLon + (Math.random()-0.5)*0.0003,
     alive: true
   };
 }

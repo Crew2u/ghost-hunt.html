@@ -14,12 +14,51 @@ html, body {
   font-family: 'Courier New', monospace;
 }
 
+/* Camera */
 #camera {
   position: fixed;
   width: 100vw;
   height: 100vh;
   object-fit: cover;
   z-index: 1;
+  filter: contrast(1.1);
+}
+
+/* NIGHT VISION FILTER */
+#nightVision {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  z-index: 2;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: rgba(0, 100, 0, 0.25);
+  filter: saturate(2) contrast(1.3);
+}
+
+/* Scanlines */
+#scanlines {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  z-index: 3;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    rgba(0, 0, 0, 0.2) 0px,
+    rgba(0, 0, 0, 0.2) 2px,
+    rgba(0, 0, 0, 0.0) 4px
+  );
+  opacity: 0.25;
+}
+
+/* Glitch overlay */
+#glitch {
+  position: fixed;
+  width: 100vw;
+  height: 100vh;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0.0;
 }
 
 /* HUD Layer */
@@ -162,14 +201,14 @@ html, body {
 }
 
 /* Ghost */
-#ghost {
+.ghost {
   position: fixed;
   width: 220px;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
   opacity: 0;
-  z-index: 4;
+  z-index: 6;
   pointer-events: none;
   transition: opacity 0.6s ease, transform 0.6s ease;
 }
@@ -181,8 +220,19 @@ html, body {
 
 <video id="camera" autoplay playsinline></video>
 
-<!-- GHOST -->
-<video id="ghost" autoplay loop muted playsinline>
+<!-- NIGHT VISION -->
+<div id="nightVision"></div>
+<div id="scanlines"></div>
+<div id="glitch"></div>
+
+<!-- GHOSTS -->
+<video class="ghost" id="ghost1" autoplay loop muted playsinline>
+  <source src="ghost.webm" type="video/webm">
+</video>
+<video class="ghost" id="ghost2" autoplay loop muted playsinline>
+  <source src="ghost.webm" type="video/webm">
+</video>
+<video class="ghost" id="ghost3" autoplay loop muted playsinline>
   <source src="ghost.webm" type="video/webm">
 </video>
 
@@ -214,103 +264,40 @@ let playerLat, playerLon, heading = 0;
 let activeGhost = null;
 
 const camera = document.getElementById("camera");
-const ghost = document.getElementById("ghost");
+const ghosts = [
+  document.getElementById("ghost1"),
+  document.getElementById("ghost2"),
+  document.getElementById("ghost3")
+];
+
 const status = document.getElementById("status");
 const distanceEl = document.getElementById("distance");
 const needle = document.getElementById("needle");
 const arrow = document.getElementById("directionArrow");
 const emfFill = document.getElementById("emfFill");
 const captureBtn = document.getElementById("captureBtn");
+const glitch = document.getElementById("glitch");
 const beep = new Audio("beep.mp3");
 
-// 🔴 CHANGE THIS TO YOUR TEST LOCATION
-let ghostLat = -26.41003;
-let ghostLon = 152.92618;
+// TEST LOCATION (YOUR COORDINATES)
+let ghostBaseLat = -26.41003;
+let ghostBaseLon = 152.92618;
 
-const REVEAL_DISTANCE = 60;
+// Ghosts data
+const ghostData = [
+  { lat: ghostBaseLat, lon: ghostBaseLon, alive: true },
+  { lat: ghostBaseLat + 0.00012, lon: ghostBaseLon - 0.00008, alive: true },
+  { lat: ghostBaseLat - 0.00012, lon: ghostBaseLon + 0.00009, alive: true }
+];
+
+const REVEAL_DISTANCE = 120;
 const CAPTURE_DISTANCE = 12;
+const MOVE_INTERVAL = 1500;
 
 navigator.mediaDevices.getUserMedia({
   video: { facingMode: "environment" },
   audio: false
 }).then(stream => camera.srcObject = stream);
 
-window.addEventListener("deviceorientation", e => {
-  if (e.alpha === null) return;
-  heading = e.alpha;
-});
+window.addEventLi
 
-navigator.geolocation.watchPosition(p => {
-  playerLat = p.coords.latitude;
-  playerLon = p.coords.longitude;
-}, err => alert("GPS error"), { enableHighAccuracy: true });
-
-function dist(a,b,c,d){
-  const R=6371e3;
-  const dLat=(c-a)*Math.PI/180;
-  const dLon=(d-b)*Math.PI/180;
-  return R*2*Math.atan2(Math.sqrt(
-    Math.sin(dLat/2)**2+
-    Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2
-  ),Math.sqrt(1));
-}
-
-function bearing(a,b,c,d){
-  const y=Math.sin((d-b)*Math.PI/180)*Math.cos(c*Math.PI/180);
-  const x=Math.cos(a*Math.PI/180)*Math.sin(c*Math.PI/180)-
-    Math.sin(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.cos((d-b)*Math.PI/180);
-  return (Math.atan2(y,x)*180/Math.PI+360)%360;
-}
-
-function updateHUD(){
-  if(!playerLat) return;
-
-  const d = dist(playerLat,playerLon,ghostLat,ghostLon);
-  distanceEl.innerText = Math.round(d) + " m";
-
-  const b = bearing(playerLat,playerLon,ghostLat,ghostLon);
-
-  // Compass needle
-  needle.style.transform = `translateX(-50%) translateY(-100%) rotate(${heading}deg)`;
-
-  // Arrow points to ghost
-  const diff = (b - heading + 360) % 360;
-  arrow.style.transform = `translate(-50%, -50%) rotate(${diff}deg)`;
-
-  // EMF based on distance
-  const emf = Math.max(0, Math.min(1, (REVEAL_DISTANCE - d) / REVEAL_DISTANCE));
-  emfFill.style.height = (emf*100)+"%";
-
-  // Ghost visibility
-  let opacity = 0;
-  if (d < REVEAL_DISTANCE) {
-    opacity = 1 - (d / REVEAL_DISTANCE);
-  }
-  ghost.style.opacity = opacity;
-
-  // Capture
-  if(d < CAPTURE_DISTANCE && diff < 25){
-    captureBtn.style.display = "block";
-    status.innerText = "TARGET LOCKED";
-    status.style.color = "#00ffcc";
-  } else {
-    captureBtn.style.display = "none";
-    status.innerText = "SEARCHING...";
-    status.style.color = "#ff6666";
-  }
-
-  // sound
-  if(d < 40) beep.play();
-}
-
-setInterval(updateHUD, 100);
-
-captureBtn.onclick = () => {
-  ghost.style.opacity = 0;
-  captureBtn.style.display = "none";
-  status.innerText = "CAPTURED!";
-};
-</script>
-
-</body>
-</html>

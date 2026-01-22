@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body style="background:black;color:#0ff;font-family:monospace">
+<h2 id="out">Waiting...</h2>
+
+<script>
+navigator.geolocation.watchPosition(
+  p => {
+    document.getElementById("out").innerText =
+      p.coords.latitude + ", " + p.coords.longitude;
+  },
+  e => {
+    document.getElementById("out").innerText = "ERROR: " + e.message;
+  },
+  { enableHighAccuracy:true }
+);
+</script>
+</body>
+</html>
